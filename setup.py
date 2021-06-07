@@ -5,9 +5,6 @@ from distutils.core import setup
 ext_modules = []
 cmdclass = {}
 
-with open('requirements.txt', 'r') as handle:
-    install_requires = handle.read().splitlines()
-
 setup(
     name='compert',
     version='1.0.0',
@@ -19,5 +16,4 @@ setup(
     packages=['compert'],
     cmdclass=cmdclass,
     ext_modules=ext_modules,
-    install_requires=install_requires,
 )
