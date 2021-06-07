@@ -48,7 +48,12 @@ class Dataset:
         self.perturbation_key = perturbation_key
         self.dose_key = dose_key
         self.cell_type_key = cell_type_key
-        self.genes = torch.Tensor(data.X.A)
+        try:
+            # np.matrix
+            self.genes = torch.Tensor(data.X.A)
+        except AttributeError:
+            # np.ndarray
+            self.genes = torch.Tensor(data.X)
 
         self.var_names = data.var_names        
 
