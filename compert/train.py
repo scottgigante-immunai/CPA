@@ -3,6 +3,7 @@
 import os
 import json
 import argparse
+import logging
 
 import torch
 import numpy as np
@@ -19,11 +20,31 @@ from sklearn.preprocessing import StandardScaler
 
 import time
 
-def pjson(s):
+def init_logging(logger):
+    if len(logger.handlers) == 0:
+        fh = logging.FileHandler('compert.log')
+        fh.setLevel(logging.DEBUG)
+        # create console handler with a higher log level
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        # create formatter and add it to the handlers
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+        fh.setFormatter(formatter)
+        # add the handlers to logger
+        logger.addHandler(ch)
+        logger.addHandler(fh)
+        logger.setLevel(logging.DEBUG)
+
+logger = logging.getLogger("compert")
+init_logging(logger)
+
+def pjson(s, level=logging.INFO):
     """
     Prints a string in JSON format and flushes stdout
     """
-    print(json.dumps(s), flush=True)
+    logger.log(level, json.dumps(s))
 
 
 def evaluate_disentanglement(autoencoder, dataset, nonlinear=False):
@@ -189,10 +210,18 @@ def prepare_compert(args, state_dict=None):
     return autoencoder, datasets
 
 
-def train_compert(args, return_model=False):
+def train_compert(args, return_model=False, verbose=1):
     """
     Trains a ComPert autoencoder
     """
+    log_level = {
+        0 : logging.WARNING,
+        1 : logging.INFO,
+        2 : logging.DEBUG
+    }
+    for h in logger.handlers:
+        if isinstance(h, logging.StreamHandler):
+            h.setLevel(log_level[verbose])
 
     autoencoder, datasets = prepare_compert(args)
 
@@ -208,6 +237,7 @@ def train_compert(args, return_model=False):
 
     start_time = time.time()
     for epoch in range(args["max_epochs"]):
+        pjson({"epoch" : epoch, "status" : "start"}, level=logging.DEBUG)
         epoch_training_stats = defaultdict(float)
 
         for genes, drugs, cell_types in datasets["loader_tr"]:
@@ -216,7 +246,7 @@ def train_compert(args, return_model=False):
 
             for key, val in minibatch_training_stats.items():
                 epoch_training_stats[key] += val
-
+        
         for key, val in epoch_training_stats.items():
             epoch_training_stats[key] = val / len(datasets["loader_tr"])
             if not (key in autoencoder.history.keys()):
@@ -234,6 +264,7 @@ def train_compert(args, return_model=False):
             (epoch == args["max_epochs"] - 1)
 
         if (epoch % args["checkpoint_freq"]) == 0 or stop:
+            pjson({"epoch" : epoch, "status" : "eval"}, level=logging.DEBUG)
             evaluation_stats = evaluate(autoencoder, datasets)
             for key, val in evaluation_stats.items():
                 if not (key in autoencoder.history.keys()):
@@ -248,6 +279,7 @@ def train_compert(args, return_model=False):
                 "ellapsed_minutes": ellapsed_minutes
             })
 
+            pjson({"epoch" : epoch, "status" : "save"}, level=logging.DEBUG)
             torch.save(
                 (autoencoder.state_dict(), args, autoencoder.history),
                 os.path.join(
@@ -261,6 +293,8 @@ def train_compert(args, return_model=False):
             if stop:
                 pjson({"early_stop": epoch})
                 break
+
+        pjson({"epoch" : epoch, "status" : "complete"}, level=logging.DEBUG)
 
     if return_model:
         return autoencoder, datasets
